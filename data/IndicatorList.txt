@@ -1,0 +1,13 @@
+QEtype	Quality element	Quality subelement	Indicator	Measurement
+Biological	Phytoplankton	Phytoplankton biomass	Chla	Chlorophyll a
+Biological	Phytoplankton	Phytoplankton biomass	chlaEQR	Chlorophyll a
+Biological	Phytoplankton	Phytoplankton biomass	Biovol	Phytoplankton biovolume
+Biological	Phytoplankton	Phytoplankton biomass	BiovolEQR	Phytoplankton biovolume
+Supporting	Water transparency	Secchi depth	Secchi	Secchi depth
+Supporting	Water transparency	Secchi depth	SecchiEQR	Secchi depth
+Supporting	Nutrients	Nitrogen	DINsummer	Dissolved inorganic Nitrogen
+Supporting	Nutrients	Nitrogen	TNsummer	Total Nitrogen
+Supporting	Nutrients	Nitrogen	TNwinter	Total Nitrogen
+Supporting	Nutrients	Phosphorus	DIPsummer	Dissolved inorganic Phosphorus
+Supporting	Nutrients	Phosphorus	TPsummer	Total Phosphorus
+Supporting	Nutrients	Phosphorus	TPwinter	Total Phosphorus

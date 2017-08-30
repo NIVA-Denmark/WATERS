@@ -14,6 +14,8 @@
 #' @param MonthInclude A list of months to be included in the indicator
 #' @param var_year Variance for the interannual variation
 #' @param var_station Variance for the variation among stations
+#' @param var_statyear Variance for the interaction bw years and stations
+#' @param var_inst Variance for the variation among institutions
 #' @param var_res Variance for the residual variation
 #' @param n_iter Number of iterations for Monte Carlo simulation
 #'   
@@ -21,9 +23,12 @@
 #' @export
 #' 
 #' @examples
+
+library(prodlim)
 CalculateIndicator_Chla <-
-  function(df,MonthInclude,var_year,var_station,var_res,n_iter=1000) {
-    
+  function(df,MonthInclude,var_year,var_station,var_statyear,var_inst,var_res,n_iter=1000) {
+# Set flag to zero and change it for error handling below
+    flag <- 0
 # Add month and year to df
     df <- mutate(df,month=month(date))
     df <- mutate(df,year=month(year))
@@ -31,25 +36,49 @@ CalculateIndicator_Chla <-
     df <- filter(df,month %in% MonthInclude)
 # Remove observations with missing values    
     df <-drop_na(df,chla)
-# Calculate number of years and stations in df 
+# Calculate number of years, stations, year*stations, institutions in df 
     n_obs <- length(df$chla)
     n_year <- length(unique(df$year))
     n_station <- length(unique(df$station))
+    n_statyear <- nrow(unique(data.frame(df$station,df$year)))
+    n_inst <- length(unique(df$institution))
+# Calculate indicator mean value
+    # Aggregate by year and station    
+    dfres <- df %>%
+      group_by(year,station) %>%
+      summarise(chla = mean(chla))
+    # Aggregate by year
+    dfres <- dfres %>%
+      group_by(year) %>%
+      summarise(chla = mean(chla))
+    mean <- mean(dfres$chla)
+# Transform variances from lognormal to normal for the indicator calculations
+    alpha <- log(mean)-0.5*log(var_year/mean**2+1)
+    var_year <- exp(2*alpha+var_year)*(exp(var_year)-1)
+    var_station <- exp(2*alpha+var_station)*(exp(var_station)-1)
+    var_statyear <- exp(2*alpha+var_statyear)*(exp(var_statyear)-1)
+    var_inst <- exp(2*alpha+var_inst)*(exp(var_inst)-1)
+    var_res <- exp(2*alpha+var_res)*(exp(var_res)-1)
 # Simulate system with random variables for estimating the variance of the indicator
     Random_year <- mat.or.vec(n_year, 1)
     Random_station <- mat.or.vec(n_station, 1)
+    Random_statyear <- mat.or.vec(n_statyear, 1)
+    Random_inst <- mat.or.vec(n_inst, 1)
     Random_res <- mat.or.vec(n_obs, 1)
-    
-   # simres <- mat.or.vec(n_iter, 1)
     simres <- vector("numeric",n_iter)
+    # simulation loop
     for (isim in 1:n_iter) {
     # simulate variations in the random factors using the data structure
         for (i in 1:n_year) {Random_year[i] <- rnorm(1) * sqrt(var_year)}
         for (i in 1:n_station) {Random_station[i] <- rnorm(1) * sqrt(var_station)}
+        for (i in 1:n_statyear) {Random_statyear[i] <- rnorm(1) * sqrt(var_statyear)}
+        for (i in 1:n_inst) {Random_inst[i] <- rnorm(1) * sqrt(var_inst)}
         for (i in 1:n_obs) {Random_res[i] <- rnorm(1) * sqrt(var_res)}
         simulvector_year <- Random_year[match(df$year,unique(df$year))]
         simulvector_station <- Random_station[match(df$station,unique(df$station))]
-        simulvector_obs <- simulvector_year+simulvector_station+Random_res
+        simulvector_statyear <- Random_statyear[row.match(data.frame(df$station,df$year),unique(data.frame(df$station,df$year)))]
+        simulvector_inst <- Random_inst[match(df$institution,unique(df$institution))]
+        simulvector_obs <- simulvector_year+simulvector_station+simulvector_statyear+simulvector_inst+Random_res
         simul_df <- data.frame(df$year,df$station,simulvector_obs)
         simres[isim] <- simul_df %>%
           group_by(df.year,df.station) %>%
@@ -57,22 +86,16 @@ CalculateIndicator_Chla <-
           group_by(df.year) %>%
           summarise(simulvector_obs = mean(simulvector_obs)) %>%
           summarise(simulvector_obs = mean(simulvector_obs))
-         }
+         } # end simulation loop
     
-# Aggregate by year and station    
-    dfres <- df %>%
-      group_by(year,station) %>%
-      summarise(chla = mean(chla))
-# Aggregate by year
-    dfres <- dfres %>%
-      group_by(year) %>%
-      summarise(chla = mean(chla))
+
 # Aggregate for entire period
 # Only use indicator if there are at least 3 years of data  
-    mean <- ifelse(length(dfres$chla)>=3,mean(dfres$chla),NA)
+    mean <- ifelse(length(dfres$chla)>=3,mean,NA)
     stderr <- ifelse(length(dfres$chla)>=3,sd(as.numeric(simres)),NA)
-    error_sim <- c(rep(mean,n_iter))+as.numeric(simres)
-    res <- list(mean=mean,stderr=stderr,error_sim=error_sim)
+    flag <- ifelse(length(dfres$chla)<3,-1,flag)
+    error_sim <- as.numeric(simres)
+    res <- list(mean=mean,stderr=stderr,error_sim=error_sim,n_obs=n_obs,n_year=n_year,n_station=n_station,result_code=flag)
     return(res)
   }
 
@@ -94,6 +117,8 @@ CalculateIndicator_Chla <-
 #' @param MonthInclude A list of months to be included in the indicator
 #' @param var_year Variance for the interannual variation
 #' @param var_station Variance for the variation among stations
+#' @param var_statyear Variance for the interaction bw years and stations
+#' @param var_inst Variance for the variation among institutions
 #' @param var_res Variance for the residual variation
 #' @param n_iter Number of iterations for Monte Carlo simulation
 #'   
@@ -102,38 +127,64 @@ CalculateIndicator_Chla <-
 #' 
 #' @examples
 CalculateIndicator_ChlaEQR <-
-  function(df,RefCond_sali,MonthInclude,var_year,var_station,var_res,n_iter=1000) {
-    
-    # Add month and year to df
+  function(df,RefCond_sali,MonthInclude,var_year,var_station,var_statyear,var_inst,var_res,n_iter=1000) {
+# Set flag to zero and change it for error handling below
+    flag <- 0  
+# Add month and year to df
     df <- mutate(df,month=month(date))
     df <- mutate(df,year=month(year))
-    # Use only June-August data    
+# Use only June-August data    
     df <- filter(df,month %in% MonthInclude)
-    # Remove observations with missing values    
+# Remove observations with missing values    
     df <-drop_na(df,chla)
-    # Calculate number of years and stations in df 
+# Calculate number of years, stations, year*stations, institutions in df 
     n_obs <- length(df$chla)
     n_year <- length(unique(df$year))
     n_station <- length(unique(df$station))
-    # Simulate system with random variables for estimating the variance of the indicator
+    n_statyear <- nrow(unique(data.frame(df$station,df$year)))
+    n_inst <- length(unique(df$institution))
+# Calculate indicator mean value
+    # Aggregate by year and station    
+    dfres <- df %>%
+      group_by(year,station) %>%
+      summarise(chla = mean(chla))
+    # Aggregate by year
+    dfres <- dfres %>%
+      group_by(year) %>%
+      summarise(chla = mean(chla))
+    mean <- mean(dfres$chla)
+# Transform variances from lognormal to normal for the indicator calculations
+    alpha <- log(mean)-0.5*log(var_year/mean**2+1)
+    var_year <- exp(2*alpha+var_year)*(exp(var_year)-1)
+    var_station <- exp(2*alpha+var_station)*(exp(var_station)-1)
+    var_statyear <- exp(2*alpha+var_statyear)*(exp(var_statyear)-1)
+    var_inst <- exp(2*alpha+var_inst)*(exp(var_inst)-1)
+    var_res <- exp(2*alpha+var_res)*(exp(var_res)-1)
+# Simulate system with random variables for estimating the variance of the indicator
     Random_year <- mat.or.vec(n_year, 1)
     Random_station <- mat.or.vec(n_station, 1)
+    Random_statyear <- mat.or.vec(n_statyear, 1)
+    Random_inst <- mat.or.vec(n_inst, 1)
     Random_res <- mat.or.vec(n_obs, 1)
-    RefCond_chla <- mat.or.vec(n_obs, 1)
+    simres <- vector("numeric",n_iter)
     chlaEQR <- mat.or.vec(n_obs, 1)
+# setting RefCond depending on salinity
+    RefCond_chla <- mat.or.vec(n_obs, 1)
     sali_class <- findInterval(df$sali, c(seq(0, 35)))
     for (i in 1:n_obs) {RefCond_chla[i] <- RefCond_sali[sali_class[i]]}
-    
-    # simres <- mat.or.vec(n_iter, 1)
-    simres <- vector("numeric",n_iter)
+    # simulation loop
     for (isim in 1:n_iter) {
       # simulate variations in the random factors using the data structure
       for (i in 1:n_year) {Random_year[i] <- rnorm(1) * sqrt(var_year)}
       for (i in 1:n_station) {Random_station[i] <- rnorm(1) * sqrt(var_station)}
+      for (i in 1:n_statyear) {Random_statyear[i] <- rnorm(1) * sqrt(var_statyear)}
+      for (i in 1:n_inst) {Random_inst[i] <- rnorm(1) * sqrt(var_inst)}
       for (i in 1:n_obs) {Random_res[i] <- rnorm(1) * sqrt(var_res)}
       simulvector_year <- Random_year[match(df$year,unique(df$year))]
       simulvector_station <- Random_station[match(df$station,unique(df$station))]
-      simulvector_obs <- df$chla+simulvector_year+simulvector_station+Random_res
+      simulvector_statyear <- Random_statyear[row.match(data.frame(df$station,df$year),unique(data.frame(df$station,df$year)))]
+      simulvector_inst <- Random_inst[match(df$institution,unique(df$institution))]
+      simulvector_obs <- df$chla+simulvector_year+simulvector_station+simulvector_statyear+simulvector_inst+Random_res
       # Calculate the EQR value for the Chla observation and set to 1 if lower than RC value
       for (i in 1:n_obs) {chlaEQR[i] <- ifelse(simulvector_obs[i]<RefCond_chla[i],1,RefCond_chla[i]/simulvector_obs[i])}
       
@@ -144,7 +195,7 @@ CalculateIndicator_ChlaEQR <-
         group_by(df.year) %>%
         summarise(chlaEQR = mean(chlaEQR)) %>%
         summarise(chlaEQR = mean(chlaEQR))
-    }
+    } # end simulation loop
     
     # Recalculate chlaEQR for the original data    
     for (i in 1:n_obs) {chlaEQR[i] <- ifelse(df$chla[i]<RefCond_chla[i],1,RefCond_chla[i]/df$chla[i])}
@@ -161,8 +212,9 @@ CalculateIndicator_ChlaEQR <-
     # Only use indicator if there are at least 3 years of data  
     mean <- ifelse(length(dfres$chlaEQR)>=3,mean(dfres$chlaEQR),NA)
     stderr <- ifelse(length(dfres$chlaEQR)>=3,sd(as.numeric(simres)),NA)
+    flag <- ifelse(length(dfres$chlaEQR)<3,-1,flag)
     error_sim <- as.numeric(simres)
-    res <- list(mean=mean,stderr=stderr,error_sim=error_sim)
+    res <- list(mean=mean,stderr=stderr,error_sim=error_sim,n_obs=n_obs,n_year=n_year,n_station=n_station,result_code=flag)
     return(res)
   }
 
@@ -188,6 +240,8 @@ CalculateIndicator_ChlaEQR <-
 #' @param MonthInclude A list of months to be included in the indicator
 #' @param var_year Variance for the interannual variation
 #' @param var_station Variance for the variation among stations
+#' @param var_statyear Variance for the interaction bw years and stations
+#' @param var_inst Variance for the variation among institutions
 #' @param var_res Variance for the residual variation
 #' @param n_iter Number of iterations for Monte Carlo simulation
 #'   
@@ -196,17 +250,17 @@ CalculateIndicator_ChlaEQR <-
 #' 
 #' @examples
 CalculateIndicator_nutrientEQR <-
-  function(NutrientIndicator,df,RefCond_sali,MonthInclude,var_year,var_station,var_res,n_iter=1000) {
-    
-    # Add month and year to df
+  function(NutrientIndicator,df,RefCond_sali,MonthInclude,var_year,var_station,var_statyear,var_inst,var_res,n_iter=1000) {
+# Set flag to zero and change it for error handling below
+    flag <- 0
+# Add month and year to df
     df <- mutate(df,month=month(date))
     df <- mutate(df,year=month(year))
-    
-    # Use only June-August data    
+# Use only June-August data    
     df <- filter(df,month %in% MonthInclude)
-    # Switch year for winter months (Nov+Dec) to include in winter indicators
+# Switch year for winter months (Nov+Dec) to include in winter indicators
     df <- mutate(df,year=ifelse(month %in% c(11,12),year+1,year))
-    # Select the indicator response variable
+# Select the indicator response variable
     nutrient <- switch(NutrientIndicator,
                        DINsummer = df$DIN,
                        DIPsummer = df$DIP,
@@ -215,31 +269,56 @@ CalculateIndicator_nutrientEQR <-
                        TPsummer = df$TP,
                        TPwinter = df$TP)
     df <- mutate(df,nutrient=nutrient)                   
-    # Remove observations with missing values    
+# Remove observations with missing values    
     df <-drop_na(df,nutrient)
-    # Calculate number of years and stations in df 
+# Calculate number of years and stations in df 
     n_obs <- length(df$nutrient)
     n_year <- length(unique(df$year))
     n_station <- length(unique(df$station))
-    # Simulate system with random variables for estimating the variance of the indicator
+    n_statyear <- nrow(unique(data.frame(df$station,df$year)))
+    n_inst <- length(unique(df$institution))
+# Calculate indicator mean value
+    # Aggregate by year and station    
+    dfres <- df %>%
+      group_by(year,station) %>%
+      summarise(nutrient = mean(nutrient))
+    # Aggregate by year
+    dfres <- dfres %>%
+      group_by(year) %>%
+      summarise(nutrient = mean(nutrient))
+    mean <- mean(dfres$nutrient)
+# Transform variances from lognormal to normal for the indicator calculations
+    alpha <- log(mean)-0.5*log(var_year/mean**2+1)
+    var_year <- exp(2*alpha+var_year)*(exp(var_year)-1)
+    var_station <- exp(2*alpha+var_station)*(exp(var_station)-1)
+    var_statyear <- exp(2*alpha+var_statyear)*(exp(var_statyear)-1)
+    var_inst <- exp(2*alpha+var_inst)*(exp(var_inst)-1)
+    var_res <- exp(2*alpha+var_res)*(exp(var_res)-1)
+# Simulate system with random variables for estimating the variance of the indicator
     Random_year <- mat.or.vec(n_year, 1)
     Random_station <- mat.or.vec(n_station, 1)
+    Random_statyear <- mat.or.vec(n_statyear, 1)
+    Random_inst <- mat.or.vec(n_inst, 1)
     Random_res <- mat.or.vec(n_obs, 1)
-    RefCond_nutrient <- mat.or.vec(n_obs, 1)
     nutrientEQR <- mat.or.vec(n_obs, 1)
+# Setting RefCond depending on salinity
+    RefCond_nutrient <- mat.or.vec(n_obs, 1)
     sali_class <- findInterval(df$sali, c(seq(0, 35)))
     for (i in 1:n_obs) {RefCond_nutrient[i] <- RefCond_sali[sali_class[i]]}
-    
-    # simres <- mat.or.vec(n_iter, 1)
+    # simulation loop
     simres <- vector("numeric",n_iter)
     for (isim in 1:n_iter) {
       # simulate variations in the random factors using the data structure
       for (i in 1:n_year) {Random_year[i] <- rnorm(1) * sqrt(var_year)}
       for (i in 1:n_station) {Random_station[i] <- rnorm(1) * sqrt(var_station)}
+      for (i in 1:n_statyear) {Random_statyear[i] <- rnorm(1) * sqrt(var_statyear)}
+      for (i in 1:n_inst) {Random_inst[i] <- rnorm(1) * sqrt(var_inst)}
       for (i in 1:n_obs) {Random_res[i] <- rnorm(1) * sqrt(var_res)}
       simulvector_year <- Random_year[match(df$year,unique(df$year))]
       simulvector_station <- Random_station[match(df$station,unique(df$station))]
-      simulvector_obs <- df$nutrient+simulvector_year+simulvector_station+Random_res
+      simulvector_statyear <- Random_statyear[row.match(data.frame(df$station,df$year),unique(data.frame(df$station,df$year)))]
+      simulvector_inst <- Random_inst[match(df$institution,unique(df$institution))]
+      simulvector_obs <- df$nutrient+simulvector_year+simulvector_station+simulvector_statyear+simulvector_inst+Random_res
       # Calculate the EQR value for the nutrient observation
       nutrientEQR <- RefCond_nutrient/simulvector_obs
       
@@ -248,7 +327,7 @@ CalculateIndicator_nutrientEQR <-
         group_by(df.year) %>%
         summarise(nutrientEQR = mean(nutrientEQR)) %>%
         summarise(nutrientEQR = mean(nutrientEQR))
-    }
+    } # end simulation loop
     
     # Recalculate nutrientEQR for the original data    
     nutrientEQR <- RefCond_nutrient/df$nutrient
@@ -261,7 +340,8 @@ CalculateIndicator_nutrientEQR <-
     # Only use indicator if there are at least 3 years of data  
     mean <- ifelse(length(dfres$nutrientEQR)>=3,mean(dfres$nutrientEQR),NA)
     stderr <- ifelse(length(dfres$nutrientEQR)>=3,sd(as.numeric(simres)),NA)
+    flag <- ifelse(length(dfres$nutrientEQR)<3,-1,flag)
     error_sim <- as.numeric(simres)
-    res <- list(mean=mean,stderr=stderr,error_sim=error_sim)
+    res <- list(mean=mean,stderr=stderr,error_sim=error_sim,n_obs=n_obs,n_year=n_year,n_station=n_station,result_code=flag)
     return(res)
   }

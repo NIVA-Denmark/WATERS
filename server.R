@@ -13,7 +13,7 @@ source("CalculateIndicator.R")
 source("Assessment.R")
 source("ReadBounds.R")
 
-shinyServer(function(input, output) {
+shinyServer(function(input, output,session) {
   # missing code
   
   # df.select <- reactiveValues(data = NULL)
@@ -70,7 +70,7 @@ shinyServer(function(input, output) {
   
   
   outputdata <- reactive({
-    df.select
+    df.select <- filter(df, WB %in% input$waterbody, period==input$period)
   })
   
   
@@ -115,10 +115,16 @@ shinyServer(function(input, output) {
   
   output$dataButton <- renderUI({
     if(datacount()>0){
-      tagList(actionButton("goButton", "GO"))
+      tagList(actionButton("goButton", "Calculate"))
     }
   })
+
+  output$x1 = DT::renderDataTable(outputdata(), server = TRUE)
   
+  observeEvent(input$goButton, {
+    updateTabsetPanel(session, "inTabset",
+                      selected = "tabResults")
+  })
   
   
 })

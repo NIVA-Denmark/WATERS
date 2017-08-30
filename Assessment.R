@@ -31,33 +31,44 @@ Assessment <-
       df <- df.all %>% filter(WB == wblist$WB[iWB])
 
       # Calculate the indicator
-      res.chl<-CalculateIndicator_Chla(df,c(6,7,8),parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "year(vandomr*period)"],
+      #CalculateIndicator_Chla()<-
+      #function(df,MonthInclude,var_year,var_station,var_statyear,var_inst,var_res,n_iter=1000)
+      
+      res.chl<-CalculateIndicator_Chla(df,c(6,7,8),
+                                       parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "year(vandomr*period)"],
                                        parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "stati(vandom*period)"],
                                        parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "Residual"], 
-                                       n_iter=nsim)
+                                        0,0,
+                                      n_iter=nsim)
       
       # type with no salinity correction, e.g. type=6
       RefCond_sali <- c(rep(0.9,36))
       # type with salinity correction, e.g. type=8
       RefCond_sali <- c(15.7,12.4,9.5,6.9,4.8,3.0,1.7,rep(1.29,29))
       
-      res.chlEQR<-CalculateIndicator_ChlaEQR(df,RefCond_sali,c(6,7,8),parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "year(vandomr*period)"],
-                                          parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "stati(vandom*period)"],
-                                          parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "Residual"], 
-                                          n_iter=nsim)
+      res.chlEQR<-CalculateIndicator_ChlaEQR(df,RefCond_sali,c(6,7,8),
+                                             parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "year(vandomr*period)"],
+                                             parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "stati(vandom*period)"],
+                                             parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "Residual"],
+                                             0,0,
+                                             n_iter=nsim)
       
       # type with salinity correction, e.g. type=8 in summer
       RefCond_sali <- c(56,50,43,37,31,24,18,rep(15,29))
-      res.TNsummer<-CalculateIndicator_nutrientEQR("TNsummer",df,RefCond_sali,c(6,7,8),parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "year(vandomr*period)"],
+      res.TNsummer<-CalculateIndicator_nutrientEQR("TNsummer",df,RefCond_sali,c(6,7,8),
+                                                   parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "year(vandomr*period)"],
                                                    parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "stati(vandom*period)"],
                                                    parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "Residual"], 
+                                                   0,0,
                                                    n_iter=nsim)
       
       # type with salinity correction, e.g. type=8 in winter
       RefCond_sali <- c(56,50,44,38,32,26,20,rep(17,29))
-      res.TNwinter<-CalculateIndicator_nutrientEQR("TNwinter",df,RefCond_sali,c(11,12,1,2),parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "year(vandomr*period)"],
+      res.TNwinter<-CalculateIndicator_nutrientEQR("TNwinter",df,RefCond_sali,c(11,12,1,2),
+                                                   parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "year(vandomr*period)"],
                                                    parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "stati(vandom*period)"],
                                                    parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "Residual"], 
+                                                   0,0,
                                                    n_iter=nsim)
       
       #Combine results of different indicators - Mean and StdErr
@@ -139,7 +150,14 @@ Assessment <-
  
     #Indicators
     
-    res[[3]]<-res.ind %>% select(-c(ClassID,QE)) #(WB,Type,Indicator,Mean,StdErr,UseEQR,Ref,HG,GM,MP,PB)
+    res[[3]]<-res.ind %>% 
+      select( WB,Type,QualityElement,Indicator,Mean,StdErr,EQR,Class,fBad,fPoor,fMod,fGood,fHigh )
+    #res[[3]]<-res.ind %>% select(-c(ClassID,QE)) #(WB,Type,Indicator,Mean,StdErr,UseEQR,Ref,HG,GM,MP,PB)
+
+    res[[4]]<-res.rnd
+    
+    res.rnd 
+    
     return(res)
   }
 
