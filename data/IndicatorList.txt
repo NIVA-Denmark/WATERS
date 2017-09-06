@@ -11,3 +11,9 @@ Supporting	Nutrients	Nitrogen	TNwinter	Total Nitrogen
 Supporting	Nutrients	Phosphorus	DIPsummer	Dissolved inorganic Phosphorus
 Supporting	Nutrients	Phosphorus	TPsummer	Total Phosphorus
 Supporting	Nutrients	Phosphorus	TPwinter	Total Phosphorus
+Supporting	Nutrients	Nitrogen	DINsummerEQR	Dissolved inorganic Nitrogen
+Supporting	Nutrients	Nitrogen	TNsummerEQR	Total Nitrogen
+Supporting	Nutrients	Nitrogen	TNwinterEQR	Total Nitrogen
+Supporting	Nutrients	Phosphorus	DIPsummerEQR	Dissolved inorganic Phosphorus
+Supporting	Nutrients	Phosphorus	TPsummerEQR	Total Phosphorus
+Supporting	Nutrients	Phosphorus	TPwinterEQR	Total Phosphorus

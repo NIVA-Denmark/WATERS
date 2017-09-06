@@ -1,3 +1,4 @@
+
 #' Assessment
 #' 
 #' 
@@ -19,107 +20,127 @@ Assessment <-
   function(df.all,nsim=1000) {
     
     df.bounds<-ReadBounds()
+    df.indicators<-ReadIndicatorType()
     
     df.all$typology<-gsub("SE_", "", df.all$typology)
     
     wblist<-distinct(df.all,WB,typology)
     wbcount<-nrow(wblist)
     
+    # Read general parameters for the indicator
     parmlist <- ReadParms_chla()
+    variance_list <- list(V_station=parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "stati(vandom*period)"],V_obspoint=0,
+                          V_year=parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "year(vandomr*period)"],V_yearmonth=0,
+                          V_tempres=parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "Residual"],
+                          V_stationyear=parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "stat*year(vand*peri)"],V_stationmonth=0,
+                          V_institution=parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "proevetager"])
+    
+    
     #cat(paste0("ALL: ",nrow(df.all),"\n"))
     for(iWB in 1:wbcount){
-      df <- df.all %>% filter(WB == wblist$WB[iWB])
-
-      # Calculate the indicator
-      #CalculateIndicator_Chla()<-
-      #function(df,MonthInclude,var_year,var_station,var_statyear,var_inst,var_res,n_iter=1000)
+      df.temp<-df.all %>% filter(WB == wblist$WB[iWB])
+      plist<-distinct(df.all,period)
+      pcount<-nrow(plist)
       
-      res.chl<-CalculateIndicator_Chla(df,c(6,7,8),
-                                       parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "year(vandomr*period)"],
-                                       parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "stati(vandom*period)"],
-                                       parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "Residual"], 
-                                        0,0,
-                                      n_iter=nsim)
-      
-      # type with no salinity correction, e.g. type=6
-      RefCond_sali <- c(rep(0.9,36))
-      # type with salinity correction, e.g. type=8
-      RefCond_sali <- c(15.7,12.4,9.5,6.9,4.8,3.0,1.7,rep(1.29,29))
-      
-      res.chlEQR<-CalculateIndicator_ChlaEQR(df,RefCond_sali,c(6,7,8),
-                                             parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "year(vandomr*period)"],
-                                             parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "stati(vandom*period)"],
-                                             parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "Residual"],
-                                             0,0,
-                                             n_iter=nsim)
-      
-      # type with salinity correction, e.g. type=8 in summer
-      RefCond_sali <- c(56,50,43,37,31,24,18,rep(15,29))
-      res.TNsummer<-CalculateIndicator_nutrientEQR("TNsummer",df,RefCond_sali,c(6,7,8),
-                                                   parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "year(vandomr*period)"],
-                                                   parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "stati(vandom*period)"],
-                                                   parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "Residual"], 
-                                                   0,0,
-                                                   n_iter=nsim)
-      
-      # type with salinity correction, e.g. type=8 in winter
-      RefCond_sali <- c(56,50,44,38,32,26,20,rep(17,29))
-      res.TNwinter<-CalculateIndicator_nutrientEQR("TNwinter",df,RefCond_sali,c(11,12,1,2),
-                                                   parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "year(vandomr*period)"],
-                                                   parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "stati(vandom*period)"],
-                                                   parmlist$covparams_CumCover$Estimate[parmlist$covparams_CumCover$CovParm == "Residual"], 
-                                                   0,0,
-                                                   n_iter=nsim)
-      
-      #Combine results of different indicators - Mean and StdErr
-      df.temp<-data.frame(Mean=res.chl[[1]],StdErr=res.chl[[2]])
-      df.temp$Indicator<-"chla"
-      res.ind.temp<-df.temp
-      df.temp<-data.frame(Mean=res.TNsummer[[1]],StdErr=res.TNsummer[[2]])
-      df.temp$Indicator<-"TNsummer"
-      res.ind.temp<-bind_rows(res.ind.temp,df.temp)
-      df.temp<-data.frame(Mean=res.TNwinter[[1]],StdErr=res.TNwinter[[2]])
-      df.temp$Indicator<-"TNwinter"
-      res.ind.temp<-bind_rows(res.ind.temp,df.temp)
-      res.ind.temp$WB<-wblist$WB[iWB]
-      res.ind.temp$Type<-wblist$typology[iWB]
-      
-      #Combine results of different indicators - Random values
-      df.temp<-data.frame(Estimate=res.chl[[3]])
-      df.temp$Indicator<-"chla"
-      df.temp$sim<-1:nsim
-      res.rnd.temp<-df.temp
-      df.temp<-data.frame(Estimate=res.TNsummer[[3]])
-      df.temp$Indicator<-"TNsummer"
-      df.temp$sim<-1:nsim
-      res.rnd.temp<-bind_rows(res.rnd.temp,df.temp)
-      df.temp<-data.frame(Estimate=res.TNwinter[[3]])
-      df.temp$Indicator<-"TNwinter"
-      df.temp$sim<-1:nsim
-      res.rnd.temp<-bind_rows(res.rnd.temp,df.temp)
-      res.rnd.temp$WB<-wblist$WB[iWB]
-      res.rnd.temp$Type<-wblist$typology[iWB]
-      
-      if(iWB==1){
-        res.ind<-res.ind.temp
-        res.rnd<-res.rnd.temp
-      }else{
-        res.ind<-bind_rows(res.ind,res.ind.temp)
-        res.rnd<-bind_rows(res.rnd,res.rnd.temp)
-      }
-    }      
+      for(iPeriod in 1:pcount){
+        df <- df.all %>% filter(WB == wblist$WB[iWB],period == plist$period[iPeriod])
+        cat(paste0("WB: ",wblist$WB[iWB],"  Period: ",plist$period[iPeriod],"\n"))
+        
+        startyear<-as.numeric(substr(as.character(plist$period[iPeriod]),1,4))
+        endyear<-as.numeric(substr(as.character(plist$period[iPeriod]),6,9))
+        # Calculate the indicator
+        #function(df,MonthInclude,variance_list,n_iter=1000)
+        #res.chl<-CalculateIndicator_Chla(df,c(6,7,8),variance_list,n_iter=nsim)
+        
+        # Get salinity correction values for Chla EQR indicator and calculate indicator
+        RefCond_sali<-SalinityReferenceValues(df,df.bounds,"chlaEQR",missing=0.9)
+        res.chlaEQR<-CalculateIndicator("ChlaEQR",df,RefCond_sali,variance_list,startyear,endyear,n_iter=nsim)
+        
+        # Get salinity correction values for TNsummer indicator
+        RefCond_sali<-SalinityReferenceValues(df,df.bounds,"TNsummer",missing=50)
+        RefCond_sali <- c(56,50,43,37,31,24,18,rep(15,29))
+        res.TNsummer<-CalculateIndicator("TNsummer",df,RefCond_sali,variance_list,startyear,endyear,n_iter=nsim)
+        
+        # Get salinity correction values for TNwinter indicator
+        RefCond_sali<-SalinityReferenceValues(df,df.bounds,"TNwinter",missing=50)
+        RefCond_sali <- c(56,50,44,38,32,26,20,rep(17,29))
+        res.TNwinter<-CalculateIndicator("TNwinter",df,RefCond_sali,variance_list,startyear,endyear,n_iter=nsim)
+        
+        # Calculate the indicator for Secchi depth
+        res.Secchi<-CalculateIndicator("Secchi",df,c(6,7,8),variance_list,startyear,endyear,n_iter=nsim)
+        #CalculateIndicator <-
+        #   function(Indicator,df,RefCond_sali,var_list,n_iter=1000,confidence_lvl=0.95)
+        
+        
+        #Combine results of different indicators - Mean and StdErr
+        df.temp<-data.frame(Mean=res.chlaEQR$period$mean,StdErr=res.chlaEQR$period$stderr)
+        df.temp$Indicator<-"chlaEQR"
+        res.ind.temp<-df.temp
+        
+        df.temp<-data.frame(Mean=res.TNsummer$period$mean,StdErr=res.TNsummer$period$stderr)
+        df.temp$Indicator<-"TNsummerEQR"
+        res.ind.temp<-bind_rows(res.ind.temp,df.temp)
+        
+        df.temp<-data.frame(Mean=res.TNwinter$period$mean,StdErr=res.TNwinter$period$stderr)
+        df.temp$Indicator<-"TNwinterEQR"
+        res.ind.temp<-bind_rows(res.ind.temp,df.temp)
+        
+        df.temp<-data.frame(Mean=res.Secchi$period$mean,StdErr=res.Secchi$period$stderr)
+        df.temp$Indicator<-"Secchi"
+        res.ind.temp<-bind_rows(res.ind.temp,df.temp)
+        
+        res.ind.temp$WB<-wblist$WB[iWB]
+        res.ind.temp$Type<-wblist$typology[iWB]
+        
+        #Combine results of different indicators - Random values
+        df.temp<-data.frame(Estimate=res.chlaEQR$indicator_sim,Code=res.chlaEQR$result_code)
+        df.temp$Indicator<-"chlaEQR"
+        df.temp$sim<-1:nsim
+        res.rnd.temp<-df.temp
+        
+        df.temp<-data.frame(Estimate=res.TNsummer$indicator_sim,Code=res.TNsummer$result_code)
+        df.temp$Indicator<-"TNsummerEQR"
+        df.temp$sim<-1:nsim
+        res.rnd.temp<-bind_rows(res.rnd.temp,df.temp)
+        
+        df.temp<-data.frame(Estimate=res.TNwinter$indicator_sim,Code=res.TNwinter$result_code)
+        df.temp$Indicator<-"TNwinterEQR"
+        df.temp$sim<-1:nsim
+        res.rnd.temp<-bind_rows(res.rnd.temp,df.temp)
+        
+        df.temp<-data.frame(Estimate=res.Secchi$indicator_sim,Code=res.Secchi$result_code)
+        df.temp$Indicator<-"Secchi"
+        df.temp$sim<-1:nsim
+        res.rnd.temp<-bind_rows(res.rnd.temp,df.temp)
+        
+        res.rnd.temp$WB<-wblist$WB[iWB]
+        res.rnd.temp$Type<-wblist$typology[iWB]
+        
+        if(iWB==1){
+          res.ind<-res.ind.temp
+          res.rnd<-res.rnd.temp
+        }else{
+          res.ind<-bind_rows(res.ind,res.ind.temp)
+          res.rnd<-bind_rows(res.rnd,res.rnd.temp)
+        }
+      }  
+    }    
     
     # Get indicator categories based on mean values
     res.ind<- res.ind %>% select(WB,Type,Indicator,Mean,StdErr)
     res.ind<- res.ind %>% left_join(df.bounds, by=c("Indicator"="Indicator","Type"="Type"))
     
-    res.ind$Value<-ifelse(res.ind$UseEQR==1,(res.ind$Mean/res.ind$Ref),res.ind$Mean)
+    res.ind$Value<-res.ind$Mean
+    # Do we show mean concentrations where the indicator is EQR value?
+    #res.ind$Value<-ifelse(res.ind$UseEQR==1,(res.ind$Mean/res.ind$Ref),res.ind$Mean)
     res.ind<-GetClass(res.ind)
     
     # Get indicator categories for MC results
-    res.rnd<- res.rnd %>% select(WB,Type,Indicator,sim,Estimate)
+    res.rnd<- res.rnd %>% select(WB,Type,Indicator,sim,Estimate,Code)
     res.rnd<- res.rnd %>% left_join(df.bounds, by=c("Indicator"="Indicator","Type"="Type"))
-    res.rnd$Value<-ifelse(res.rnd$UseEQR==1,(res.rnd$Estimate/res.rnd$Ref),res.rnd$Estimate)
+    names(res.rnd)[names(res.rnd)=="Estimate"]<-"Value"
+    
+    #res.rnd$Value<-ifelse(res.rnd$UseEQR==1,(res.rnd$Estimate/res.rnd$Ref),res.rnd$Estimate)
     res.rnd<-GetClass(res.rnd)
     cat(paste0("Sim results: ",nrow(res.rnd),"\n"))
     
@@ -140,28 +161,31 @@ Assessment <-
     names(res.ind)[names(res.ind)=="C5"]<-"fHigh"
     
     res<-list(data.frame)
+    return(res.rnd)
     #Overall results
-    res[[1]]<-df.all %>% group_by(WB) %>%
-      summarise(n=n())
+    if(FALSE){
+      
+      res[[1]]<-df.all %>% group_by(WB) %>%
+        summarise(n=n())
+      
+      #QE results
+      res[[2]]<-res.ind %>% group_by(WB,QualityElement) %>%
+        summarise(n=n())
+      
+      #Indicators
+      
+      res[[3]]<-res.ind %>% 
+        select( WB,Type,QualityElement,Indicator,Mean,StdErr,EQR,Class,fBad,fPoor,fMod,fGood,fHigh )
+      #res[[3]]<-res.ind %>% select(-c(ClassID,QE)) #(WB,Type,Indicator,Mean,StdErr,UseEQR,Ref,HG,GM,MP,PB)
+      
+      res[[4]]<-res.rnd
+      
+      return(res)
+    }
     
-    #QE results
-    res[[2]]<-res.ind %>% group_by(WB,QE,QualityElement) %>%
-      summarise(n=n())
- 
-    #Indicators
-    
-    res[[3]]<-res.ind %>% 
-      select( WB,Type,QualityElement,Indicator,Mean,StdErr,EQR,Class,fBad,fPoor,fMod,fGood,fHigh )
-    #res[[3]]<-res.ind %>% select(-c(ClassID,QE)) #(WB,Type,Indicator,Mean,StdErr,UseEQR,Ref,HG,GM,MP,PB)
-
-    res[[4]]<-res.rnd
-    
-    res.rnd 
-    
-    return(res)
   }
 
-#' Assessment
+#' GetCalss
 #' 
 #' 
 #' @param df A dataframe 
@@ -180,6 +204,13 @@ Assessment <-
 #' @examples
 GetClass<-function(df){
   Categories<-c("Bad","Poor","Mod","Good","High","Ref")
+  names(df)[names(df)=="RefCond"]<-"Ref"
+  names(df)[names(df)=="H.G"]<-"HG"
+  names(df)[names(df)=="G.M"]<-"GM"
+  names(df)[names(df)=="M.P"]<-"MP"
+  names(df)[names(df)=="P.B"]<-"PB"
+  #names(df)[names(df)==""]<-""
+  
   df$Resp<-ifelse(df$HG > df$GM,-1,1)
   df$class1<-ifelse(df$Resp==1,df$Value<df$Ref,df$Value>df$Ref)
   df$class2<-ifelse(df$Resp==1,df$Value<df$HG,df$Value>df$HG)
@@ -203,5 +234,14 @@ GetClass<-function(df){
   df$ClassID<-ifelse(df$ClassID>5,5,df$ClassID)
   df<-select(df,-c(Resp,class1,class2,class3,class4,class5,Bnd1,Bnd2))
   return(df)
+}
+
+SalinityReferenceValues <- function(df.data,df.bounds,indicator,missing=1){
+  typology <- substr(as.character(distinct(df.data,typology)[1,1]),4,5)
+  refcond<-filter(df.bounds,Type==typology,Indicator==indicator)
+  refcond<-refcond[,grep("Sali_", names(refcond), value=TRUE)]
+  refcond<-as.numeric(refcond[1,])
+  refcond[is.na(refcond)]<-missing
+  return(refcond)
 }
 

@@ -6,12 +6,14 @@ library(lme4)
 library(lubridate)
 library(shiny)
 library(dplyr)
+library(prodlim)
 
 source("ReadIndicatorParms.R")
 source("CalculateIndicator.R")
 #source("serverFunctions.R")
 source("Assessment.R")
 source("ReadBounds.R")
+source("ReadIndicatorType.R")
 
 shinyServer(function(input, output,session) {
   # missing code
@@ -32,6 +34,8 @@ shinyServer(function(input, output,session) {
   
   observeEvent(input$goButton, {
     df.select <- filter(df, WB %in% input$waterbody, period==input$period)
+    df.select$obspoint<-df.select$station
+    
     n<-nrow(df.select)
     output$nrows <- renderUI({
       tagList(p(renderText(paste0("Loaded: ",n, " rows of data."))))
